@@ -1,0 +1,252 @@
+; Srikanth Manikarnike [u0706564]
+;-[matt might]---------------------------------------------------------------
+(file_input      (>-->(seq! `(rep (or NEWLINE stmt)) ENDMARKER)
+		  [`(,anything) `(program ,@anything)]))
+                 
+;-[matt might]---------------------------------------------------------------
+(funcdef         ($-->(seq* "def" NAME parameters ":" suite)
+                      `(def (,($ 1) ,@($ 2) ) ,($ 4))))
+
+;-[matt might]---------------------------------------------------------------
+(parameters      (car (seq! "(" `(opt paramlist '()) ")")))
+
+;-[matt might]---------------------------------------------------------------
+(paramlist       (car (seq! `(seq NAME (rep (seq! "," `NAME))) (opt "," #f))))
+
+;-[no change]---------------------------------------------------------------
+(stmt            (or simple_stmt compound_stmt))
+
+;-[written]---------------------------------------------------------------
+(simple_stmt     (>-->(seq (seq small_stmt (rep (car (seq! ";" `small_stmt)))) (opt ";" #f) NEWLINE)
+                       [`((,ss . ()) ,_ . ,_) ss]
+                       [`((,ss . ,rt) ,_ . ,_) `(begin ,ss ,@rt)]))
+
+;-[no change]---------------------------------------------------------------
+(small_stmt      (or expr_stmt del_stmt pass_stmt flow_stmt global_stmt nonlocal_stmt assert_stmt))
+
+;-[written]---------------------------------------------------------------
+(expr_stmt       (>-->(or (seq* testlist augassign tuple_or_test) 
+		       (seq* testlist "=" tuple_or_test) 
+		       (seq* tuple_or_test))
+              [`(,t "="  ,t2) 
+	                  `(= (,t) ,t2)]
+              [`(,t  ,a  ,t2) 
+	                  `(,a (,t) ,t2)]
+              [`(,tt) `(expr ,tt)]))
+
+;-[written]---------------------------------------------------------------
+(augassign       (>--> (or "+=" "-=" "*=" "/=" "%=" 
+			"&=" "|=" "^=" "<<=" ">>=" "**=" "//=")
+		 [ao ao]))
+;-[written]---------------------------------------------------------------
+(del_stmt        (>--> (seq! "del" `star_expr)
+		 [`(,s) `(del ,s)])) 
+
+;-[written]---------------------------------------------------------------
+(pass_stmt       ($--> "pass" '(pass)))
+
+;-[written]---------------------------------------------------------------
+(flow_stmt       (or break_stmt continue_stmt return_stmt raise_stmt))
+	
+;-[written]---------------------------------------------------------------
+(break_stmt      ($--> "break" '(break)))
+
+;-[matt might]---------------------------------------------------------------
+(continue_stmt   ($--> "continue" '(continue)))
+
+;-[matt might]---------------------------------------------------------------
+(return_stmt     ($-->(seq* "return" (opt testlist #f))
+                      `(return ,@(cdr $$))))
+
+;-[tbd]---------------------------------------------------------------
+(raise_stmt       (>--> (seq! "raise" `(opt (seq* test (opt (seq! "from" `test) #f)) #f))
+		   [`(#f) `(raise)]
+		   [`(,t #f) `(raise ,t)]
+		   [`(,t ,t1 #f) `(raise ,t ,t1)]
+		   [`(,rt) `(raise ,@rt)]))
+
+;-[tbd]---------------------------------------------------------------
+(global_stmt      (>--> (seq! "global" `NAME (rep (seq! "," `NAME)))
+		   [`() `(global)]
+		   [`(,n ()) `(global ,n)]
+		   [`(,n ,n1) `(global ,n ,n1)]
+		   [`(,n ,rt) `(global ,n ,@rt)]))
+
+;-[tbd]---------------------------------------------------------------
+(nonlocal_stmt      (>--> (seq! "nonlocal" `NAME (rep (seq! "," `NAME)))
+		   [`() `(nonlocal)]
+		   [`(,n ()) `(nonlocal ,n)]
+		   [`(,n ,n1) `(nonlocal ,n ,n1)]
+		   [`(,n ,rt) `(nonlocal ,n ,@rt)]))
+
+;-[tbd]---------------------------------------------------------------
+(assert_stmt     (>--> (seq "assert" `test `(opt (seq! "," `test) #f))
+		  [`(,t #f) `(assert ,t)]
+		  [`(,t ,rt) `(assert ,t ,@rt)]))
+
+;-[no change]---------------------------------------------------------------
+(compound_stmt   (or if_stmt while_stmt for_stmt try_stmt funcdef))
+
+;-[written]---------------------------------------------------------------
+(if_stmt        (>-->(seq! "if" `test ":" `suite `(rep (seq! "elif" `test ":" `suite)) `(opt (seq! "else" ":" `suite) #f))
+                     [`(,t ,s () #f) `(cond (,t ,s))]
+                     [`(,t ,s () ,e) `(cond (,t ,s) (else ,@e))]
+                     [`(,t ,s ,rt #f) `(cond (,t ,s) ,@rt)]
+                     [`(,t ,s ,rt ,e) `(cond (,t ,s) ,@rt (else ,@e))]))                   
+
+;-[written]---------------------------------------------------------------
+(while_stmt       (>--> (seq! "while" `test ":" `suite 
+			 `(opt (seq! "else" ":" `suite) #f))
+		   [`(,t ,s #f) `(while ,t ,s)]
+		   [`(,t ,s ,e) `(while ,t, s ,@e)]))
+
+;-[written]---------------------------------------------------------------
+(for_stmt       (>--> (seq! "for" `NAME "in" `test ":" `suite 
+		       `(opt (seq! "else" ":" `suite) #f))
+		   [`(,n ,t ,s #f) `(for ,n ,t ,s)]
+		   [`(,n ,t ,s ,rt) `(for ,n ,t ,s ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(try_stmt        (>-->(seq! "try" ":" `suite `
+		       (or (seq* (rep+ (seq! `except_clause ":" `suite)) 
+			    (opt (car (seq! "else" ":" `suite)) #f) 
+			    (opt (car (seq! "finally" ":" `suite)) #f)) 
+			(seq! "finally" ":" `suite)))
+                      [`(,s (,cs ,ms ,fs)) `(try ,s ,cs ,ms ,fs)]
+                      [`(,s (,fs)) `(try ,s () #f ,fs)]))
+                       
+;-[written]---------------------------------------------------------------
+(except_clause   (>-->(seq! "except" `(opt (seq! `test `(opt (seq! "as" `NAME) #f)) #f))
+                 [`(#f) `(except)]
+                 [`((,t #f)) `(except ,t)]
+                 [`((,t ,n)) `(except  ,t ,@n)]))
+
+;-[written]---------------------------------------------------------------
+(suite           (>-->(or simple_stmt (seq! NEWLINE INDENT `(rep+ stmt) DEDENT))
+		  [`(,anything) `(suite ,@anything)]))
+
+;-[written]---------------------------------------------------------------
+(test            (>-->(or (seq* or_test "if" or_test "else" test) or_test lambdef)
+                      [`(,or_test1 "if" ,or_test2 "else" ,test) `(if ,or_test1 ,or_test2 ,test)]
+                      [anything anything]))
+
+;-[matt_might]---------------------------------------------------------------
+(lambdef ($--> (seq* "lambda" (opt paramlist '()) ":" test)
+	                    `(lambda ,($ 1) ,($ 3))))
+
+;-[written]---------------------------------------------------------------
+(or_test         (>-->(seq* and_test (rep (car (seq! "or" `and_test))))
+                      [`(,a ()) a]
+                      [`(,a ,b) `(or ,a ,@b)]))
+
+;-[written]---------------------------------------------------------------
+(and_test        (>-->(seq* not_test (rep (seq! "and" `not_test)))
+                      [`(,n ()) n]
+                      [`(,n ,rt) `(and ,n,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(not_test        (>-->(or (seq* "not" not_test) comparison)
+                      [`("not" ,n) `(not ,n)]
+                      [anything anything]))
+
+;-[written]---------------------------------------------------------------
+(comparison      (>-->(seq* star_expr (rep (seq* comp_op star_expr)))
+                      [`(,s  ()) s]
+                      [`(,s  ,rt) `(comparison ,s ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(comp_op         (>--> (or "<" ">" "==" ">=" "<=" "<>" "!=" "in" (seq "not" "in") "is" (seq "is" "not"))
+                       ['("not" . "in") 'not-in]
+                       ['("is" . "not") 'is-not]
+                       [anything anything]))
+
+;-[written]---------------------------------------------------------------
+(star_expr       (>--> (seq* (opt "*" #f) expr)
+                       [`(#f  ,v) v]
+                       [`(*  ,v) `(star ,v)]))
+
+;-[written]---------------------------------------------------------------
+(expr            (>--> (seq* xor_expr (rep (car (seq! "|" `xor_expr))))
+                       [`(,v  ()) v]
+                       [`(,v  ,rt) `(bitwise-or ,v ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(xor_expr        (>-->(seq* and_expr (rep (car (seq! "^" `and_expr))))
+                      [`(,v  ()) v]
+                      [`(,v  ,rt) `(bitwise-xor ,v ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(and_expr        (>-->(seq* shift_expr (rep (car (seq! "&" `shift_expr))))
+                      [`(,v ()) v]
+                      [`(,v ,rt) `(bitwise-and ,v ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(shift_expr      (>-->(seq* arith_expr (rep (seq* (or "<<" ">>") arith_expr)))
+                      [`(,v ()) v]
+                      [`(,v ,rt) `(shift ,v ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(arith_expr      (>-->(seq* term (rep (seq* (or "+" "-") term)))
+                      [`(,k ()) k]
+                      [`(,k ,rt) `(arith ,k ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(term            (>-->(seq* factor (rep (seq* (or "*" "/" "%" "//") factor)))
+                      [`(,k  () ) k]
+                      [`(,k ,rt) `(term ,k ,@rt)])) 
+
+;-[written]---------------------------------------------------------------
+(factor          (>-->(or (seq* (or "+" "-" "~") factor) power)
+                      [`(,e  ,k) `(,e ,k)]
+                      [anything anything]))
+
+;-[written]---------------------------------------------------------------
+(power           (>-->(seq* indexed (opt (car (seq! "**" `factor)) #f))
+                      [`(,m  #f) m]
+                      [`(,m  ,k) `(power ,m ,k)])) 
+
+;-[written]---------------------------------------------------------------
+(indexed         (>-->(seq* atom (rep trailer))
+                      [`(,q ()) q]
+                      [`(,q ,t) `(indexed ,q ,@t)]))
+ 
+;-[written]---------------------------------------------------------------
+(atom            (>-->(or (seq* "(" (opt tuple_or_test #f) ")") (seq* "[" (opt testlist #f) "]") (seq* "{" (opt dictorsetmaker #f) "}") NAME NUMBER (rep+ STRING) "..." "None" "True" "False")
+                      [`( "[" ,btwn "]" ) `(list ,@btwn)]
+                      [`( "(" ,btwn ")" ) btwn]
+                      [`( "{" ,btwn "}" ) btwn]
+                      [`(,s) s]
+                      [anything anything]))
+
+;-[written]---------------------------------------------------------------
+(trailer        (>-->(or (seq* "(" (opt arglist #f) ")") (seq* "[" tuple_or_test "]") (car (seq! "." `NAME)))
+                     [`( "(" #f ")" ) `(called)]
+                     [`( "(" ,a")") `(called ,a)]
+                     [`( "[" ,t"]") `(subscript ,t)]
+                     [anything anything]))
+
+;-[written]---------------------------------------------------------------
+(testlist       (>-->(seq (seq test (rep (car (seq! "," `test)))) (opt "," #f))
+                     [`((,x . ()) . ,_) x]
+                     [`((,x . ,rt) . ,_) `(,x ,@rt)]))
+
+;-[matt might]---------------------------------------------------------------
+(tuple_or_test (>--> (seq test (rep (car (seq! "," `test))) (opt "," #f)) 
+                        [`(,x () . #f)      x] 
+                        [`(,x ,rt . ,_)  `(tuple ,x ,@rt)])) 
+
+;-[written]---------------------------------------------------------------
+(dictorsetmaker (>-->(or (seq! `(seq* (seq! `test ":" `test) 
+				 (rep (seq! "," `test ":" `test))) 
+			  (opt ",")) 
+		      (seq! `(seq! `test `(rep (seq! "," `test))) 
+		       (opt ",")))
+                     [`((,x ())) `(set ,x)]
+                     [`((,x ((,rt) ... ))) `(set ,x ,@rt)]
+                     [`(((,i ,x) ())) `(dict ,i ,x)]
+                     [`(((,i ,x) ,rt)) `(dict (,i ,x) ,@rt)]))
+
+;-[written]---------------------------------------------------------------
+(arglist        (>-->(car (seq! `(seq* test (rep (seq! "," `test))) (opt ",")))
+                     [`(,k ()) k]
+                     [`(,k ,rt) `(,k ,@rt)]))
